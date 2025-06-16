@@ -77,7 +77,23 @@ export function serveStatic(app: Express) {
   }
 
   // Serve static files from the client build directory
-  app.use(express.static(distPath));
+  app.use(
+    express.static(distPath, {
+      index: false, // Don't serve index.html for directory requests
+      extensions: [
+        "html",
+        "js",
+        "css",
+        "json",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "svg",
+        "ico",
+      ],
+    })
+  );
 
   // Serve API routes
   app.use("/api", (req, res, next) => {
@@ -88,8 +104,8 @@ export function serveStatic(app: Express) {
     next();
   });
 
-  // fall through to index.html for client-side routing
-  app.use("*", (_req, res) => {
+  // Serve index.html for all other routes (client-side routing)
+  app.get("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

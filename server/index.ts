@@ -48,20 +48,17 @@ app.use((req, res, next) => {
     console.error(`[Error] ${message}`, err);
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Setup development or production environment
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
+    // In production, serve static files first
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 3000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 3000;
+  // Start the server
+  const port = parseInt(process.env.PORT || "3000", 10);
   server.listen(port, "0.0.0.0", () => {
-    log(`serving on port ${port}`);
+    log(`Server running in ${app.get("env")} mode on port ${port}`);
   });
 })();
