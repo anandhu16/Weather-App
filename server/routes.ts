@@ -1,164 +1,216 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSupplierSchema, insertProductSchema, insertOrderSchema, insertActivitySchema } from "@shared/schema";
+import { coordinatesSchema, citySearchSchema, type WeatherData, type ForecastData, type SearchResult } from "@shared/schema";
 import { z } from "zod";
+
+const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+const API_BASE_URL = "https://api.openweathermap.org/data/2.5";
+const GEO_API_URL = "https://api.openweathermap.org/geo/1.0";
+
+async function fetchFromOpenWeather(url: string): Promise<any> {
+  if (!OPENWEATHER_API_KEY) {
+    throw new Error("OpenWeather API key not configured");
+  }
+
+  const response = await fetch(`${url}&appid=${OPENWEATHER_API_KEY}`);
+  
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid API key");
+    } else if (response.status === 404) {
+      throw new Error("Location not found");
+    } else {
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+  }
+
+  return response.json();
+}
+
+function transformWeatherData(data: any, locationName?: string): WeatherData {
+  return {
+    location: {
+      name: locationName || data.name,
+      country: data.sys.country,
+      lat: data.coord.lat,
+      lon: data.coord.lon,
+    },
+    current: {
+      temp: data.main.temp,
+      feels_like: data.main.feels_like,
+      temp_min: data.main.temp_min,
+      temp_max: data.main.temp_max,
+      humidity: data.main.humidity,
+      pressure: data.main.pressure,
+      wind_speed: data.wind?.speed || 0,
+      wind_deg: data.wind?.deg || 0,
+      weather: {
+        main: data.weather[0].main,
+        description: data.weather[0].description,
+        icon: data.weather[0].icon,
+        id: data.weather[0].id,
+      },
+      visibility: data.visibility || 0,
+      dt: data.dt,
+    },
+    sys: {
+      sunrise: data.sys.sunrise,
+      sunset: data.sys.sunset,
+    },
+  };
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // Dashboard KPIs
-  app.get("/api/dashboard/kpis", async (req, res) => {
+  // Get current weather by coordinates
+  app.get("/api/weather/current", async (req, res) => {
     try {
-      const kpis = await storage.getDashboardKPIs();
-      res.json(kpis);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch KPIs" });
-    }
-  });
+      const { lat, lon } = coordinatesSchema.parse({
+        lat: parseFloat(req.query.lat as string),
+        lon: parseFloat(req.query.lon as string),
+      });
 
-  // Inventory levels for chart
-  app.get("/api/dashboard/inventory-levels", async (req, res) => {
-    try {
-      const days = parseInt(req.query.days as string) || 30;
-      const levels = await storage.getInventoryLevels(days);
-      res.json(levels);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch inventory levels" });
-    }
-  });
-
-  // Suppliers with status
-  app.get("/api/dashboard/suppliers", async (req, res) => {
-    try {
-      const suppliers = await storage.getSuppliersWithStatus();
-      res.json(suppliers);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch suppliers" });
-    }
-  });
-
-  // Recent activities
-  app.get("/api/dashboard/activities", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 20;
-      const activities = await storage.getRecentActivities(limit);
-      res.json(activities);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch activities" });
-    }
-  });
-
-  // Suppliers CRUD
-  app.get("/api/suppliers", async (req, res) => {
-    try {
-      const suppliers = await storage.getAllSuppliers();
-      res.json(suppliers);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch suppliers" });
-    }
-  });
-
-  app.post("/api/suppliers", async (req, res) => {
-    try {
-      const validatedData = insertSupplierSchema.parse(req.body);
-      const supplier = await storage.createSupplier(validatedData);
-      res.status(201).json(supplier);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Validation error", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create supplier" });
+      // Check cache first
+      const cached = await storage.getCachedWeather(lat, lon);
+      if (cached) {
+        return res.json(cached);
       }
-    }
-  });
 
-  // Products CRUD
-  app.get("/api/products", async (req, res) => {
-    try {
-      const products = await storage.getAllProducts();
-      res.json(products);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch products" });
-    }
-  });
+      const data = await fetchFromOpenWeather(
+        `${API_BASE_URL}/weather?lat=${lat}&lon=${lon}&units=metric`
+      );
 
-  app.get("/api/products/low-stock", async (req, res) => {
-    try {
-      const products = await storage.getProductsBelowThreshold();
-      res.json(products);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch low stock products" });
-    }
-  });
-
-  app.post("/api/products", async (req, res) => {
-    try {
-      const validatedData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(validatedData);
-      res.status(201).json(product);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Validation error", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create product" });
-      }
-    }
-  });
-
-  // Orders CRUD
-  app.get("/api/orders", async (req, res) => {
-    try {
-      const orders = await storage.getAllOrders();
-      res.json(orders);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch orders" });
-    }
-  });
-
-  app.get("/api/orders/active", async (req, res) => {
-    try {
-      const orders = await storage.getActiveOrders();
-      res.json(orders);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch active orders" });
-    }
-  });
-
-  app.post("/api/orders", async (req, res) => {
-    try {
-      const validatedData = insertOrderSchema.parse(req.body);
-      const order = await storage.createOrder(validatedData);
-      res.status(201).json(order);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Validation error", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create order" });
-      }
-    }
-  });
-
-  // Export functionality
-  app.post("/api/export", async (req, res) => {
-    try {
-      const { format, dateRange, includeData } = req.body;
+      const weatherData = transformWeatherData(data);
       
-      // Simulate export generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Cache the result
+      await storage.setCachedWeather(lat, lon, weatherData);
       
-      const exportData = {
-        id: Date.now().toString(),
-        format,
-        dateRange,
-        includeData,
-        status: "completed",
-        downloadUrl: `/api/export/download/${Date.now()}`,
-        createdAt: new Date().toISOString()
+      res.json(weatherData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid coordinates", errors: error.errors });
+      } else if (error instanceof Error) {
+        if (error.message === "OpenWeather API key not configured") {
+          res.status(500).json({ message: "Weather service not configured. Please provide OPENWEATHER_API_KEY." });
+        } else {
+          res.status(500).json({ message: error.message });
+        }
+      } else {
+        res.status(500).json({ message: "Failed to fetch weather data" });
+      }
+    }
+  });
+
+  // Get weather by city name
+  app.get("/api/weather/city", async (req, res) => {
+    try {
+      const { query } = citySearchSchema.parse({
+        query: req.query.q as string,
+      });
+
+      const data = await fetchFromOpenWeather(
+        `${API_BASE_URL}/weather?q=${encodeURIComponent(query)}&units=metric`
+      );
+
+      const weatherData = transformWeatherData(data, query);
+      
+      // Cache the result
+      await storage.setCachedWeather(data.coord.lat, data.coord.lon, weatherData);
+      
+      res.json(weatherData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid city name", errors: error.errors });
+      } else if (error instanceof Error) {
+        if (error.message === "OpenWeather API key not configured") {
+          res.status(500).json({ message: "Weather service not configured. Please provide OPENWEATHER_API_KEY." });
+        } else {
+          res.status(500).json({ message: error.message });
+        }
+      } else {
+        res.status(500).json({ message: "Failed to fetch weather data" });
+      }
+    }
+  });
+
+  // Get 5-day forecast
+  app.get("/api/weather/forecast", async (req, res) => {
+    try {
+      const { lat, lon } = coordinatesSchema.parse({
+        lat: parseFloat(req.query.lat as string),
+        lon: parseFloat(req.query.lon as string),
+      });
+
+      // Check cache first
+      const cached = await storage.getCachedForecast(lat, lon);
+      if (cached) {
+        return res.json(cached);
+      }
+
+      const data = await fetchFromOpenWeather(
+        `${API_BASE_URL}/forecast?lat=${lat}&lon=${lon}&units=metric`
+      );
+
+      const forecastData: ForecastData = {
+        list: data.list,
+        city: {
+          name: data.city.name,
+          country: data.city.country,
+        },
       };
       
-      res.json(exportData);
+      // Cache the result
+      await storage.setCachedForecast(lat, lon, forecastData);
+      
+      res.json(forecastData);
     } catch (error) {
-      res.status(500).json({ message: "Failed to generate export" });
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid coordinates", errors: error.errors });
+      } else if (error instanceof Error) {
+        if (error.message === "OpenWeather API key not configured") {
+          res.status(500).json({ message: "Weather service not configured. Please provide OPENWEATHER_API_KEY." });
+        } else {
+          res.status(500).json({ message: error.message });
+        }
+      } else {
+        res.status(500).json({ message: "Failed to fetch forecast data" });
+      }
+    }
+  });
+
+  // Search cities for autocomplete
+  app.get("/api/weather/search", async (req, res) => {
+    try {
+      const { query } = citySearchSchema.parse({
+        query: req.query.q as string,
+      });
+
+      const data = await fetchFromOpenWeather(
+        `${GEO_API_URL}/direct?q=${encodeURIComponent(query)}&limit=5`
+      );
+
+      const results: SearchResult[] = data.map((item: any) => ({
+        name: item.name,
+        country: item.country,
+        state: item.state,
+        lat: item.lat,
+        lon: item.lon,
+      }));
+
+      res.json(results);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid search query", errors: error.errors });
+      } else if (error instanceof Error) {
+        if (error.message === "OpenWeather API key not configured") {
+          res.status(500).json({ message: "Weather service not configured. Please provide OPENWEATHER_API_KEY." });
+        } else {
+          res.status(500).json({ message: error.message });
+        }
+      } else {
+        res.status(500).json({ message: "Failed to search cities" });
+      }
     }
   });
 
