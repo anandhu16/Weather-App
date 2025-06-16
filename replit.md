@@ -1,8 +1,8 @@
-# Supply Chain Management System - Replit.md
+# Weather Application - Replit.md
 
 ## Overview
 
-This is a full-stack supply chain management application built with React, Express, and PostgreSQL. The system provides an executive dashboard for managing inventory, suppliers, orders, and analytics with real-time data visualization and reporting capabilities.
+This is a responsive weather application built with React, Express, and TypeScript. The app provides current weather conditions, 5-day forecasts, geolocation support, and city search functionality using WeatherAPI.com as the data source.
 
 ## System Architecture
 
@@ -18,53 +18,51 @@ This is a full-stack supply chain management application built with React, Expre
 - **Runtime**: Node.js with Express.js framework
 - **Language**: TypeScript with ES modules
 - **API Pattern**: RESTful API with structured error handling
-- **Database Integration**: Drizzle ORM for type-safe database operations
-- **Session Management**: PostgreSQL-based sessions with connect-pg-simple
+- **Weather Integration**: WeatherAPI.com for real-time weather data
+- **Storage**: In-memory caching for performance optimization
 
-### Database Layer
-- **Database**: PostgreSQL 16 (configured for Neon serverless in production)
-- **ORM**: Drizzle ORM with Drizzle Kit for migrations
+### Data Storage Layer
+- **Storage**: In-memory caching system for weather data
+- **Cache Duration**: 10 minutes for optimal performance
 - **Schema Location**: `shared/schema.ts` for type sharing between client and server
 
 ## Key Components
 
-### Database Schema
-The system manages five core entities:
-- **Users**: Authentication and role-based access
-- **Suppliers**: Vendor management with performance tracking
-- **Products**: Inventory items with stock levels and thresholds
-- **Orders**: Purchase order lifecycle management
-- **Activities**: Audit trail and activity logging
+### Weather Data Schema
+The application manages weather-related data entities:
+- **WeatherData**: Current weather conditions with location details
+- **ForecastData**: 5-day weather forecast with hourly data
+- **SearchResult**: City search results with coordinates
+- **Caching**: In-memory storage for weather data (10-minute cache)
 
 ### API Endpoints
-Core dashboard endpoints:
-- `/api/dashboard/kpis` - Key performance indicators
-- `/api/dashboard/inventory-levels` - Time-series inventory data
-- `/api/dashboard/suppliers` - Supplier status overview
-- `/api/dashboard/activities` - Recent system activities
+Core weather endpoints:
+- `/api/weather/current` - Current weather by coordinates
+- `/api/weather/city` - Weather data by city name search
+- `/api/weather/forecast` - 5-day weather forecast
+- `/api/weather/search` - City search with coordinates
 
 ### UI Components
-- **Layout System**: Responsive sidebar navigation with mobile support
-- **Dashboard Widgets**: KPI cards, charts, and data tables
-- **Data Visualization**: Recharts integration for inventory trends
-- **Modal System**: Export functionality and form dialogs
+- **Weather Cards**: Current conditions and forecast display
+- **Search Bar**: City search with autocomplete
+- **Location Services**: Geolocation support for current position
+- **Responsive Design**: Mobile-first responsive layout
 
 ## Data Flow
 
 1. **Client Requests**: React components use TanStack Query hooks
-2. **API Layer**: Express routes handle business logic and data validation
-3. **Database Operations**: Drizzle ORM executes type-safe database queries
-4. **Response Processing**: Data is transformed and returned as JSON
+2. **API Layer**: Express routes handle WeatherAPI.com integration
+3. **Weather Service**: WeatherAPI.com provides real-time weather data
+4. **Response Processing**: Data is transformed and cached in memory
 5. **UI Updates**: React Query manages caching and real-time updates
 
 ## External Dependencies
 
 ### Production Dependencies
-- **@neondatabase/serverless**: Serverless PostgreSQL connection
-- **drizzle-orm**: Database ORM and query builder
+- **WeatherAPI.com**: Weather data provider (API key: configured)
 - **@tanstack/react-query**: Server state management
 - **wouter**: Lightweight React router
-- **recharts**: Charting library for data visualization
+- **lucide-react**: Icon library for weather icons
 - **date-fns**: Date manipulation utilities
 
 ### Development Tools
@@ -85,11 +83,11 @@ Core dashboard endpoints:
 - **Client Build**: Vite builds React app to `dist/public`
 - **Server Build**: ESBuild bundles server code to `dist/index.js`
 - **Static Serving**: Express serves built React app in production
-- **Database**: Neon serverless PostgreSQL with connection pooling
+- **Weather API**: WeatherAPI.com integration with API key
 
 ### Environment Configuration
 - **NODE_ENV**: Controls development vs production behavior
-- **DATABASE_URL**: PostgreSQL connection string (required)
+- **WEATHER_API_KEY**: WeatherAPI.com API key (configured: 563f2884f5b84848a1a91323251606)
 - **Replit Integration**: Cartographer plugin for development tooling
 
 ## User Preferences
