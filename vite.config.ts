@@ -29,6 +29,11 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: "assets",
     manifest: true,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   server: {
     fs: {
