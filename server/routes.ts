@@ -1,15 +1,30 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { coordinatesSchema, citySearchSchema, type WeatherData, type ForecastData, type SearchResult } from "@shared/schema";
+import {
+  coordinatesSchema,
+  citySearchSchema,
+  type WeatherData,
+  type ForecastData,
+  type SearchResult,
+} from "@shared/schema";
 import { z } from "zod";
 
-const WEATHER_API_KEY = "563f2884f5b84848a1a91323251606";
+// Use environment variable or fallback to development key
+const WEATHER_API_KEY =
+  process.env.WEATHER_API_KEY ||
+  (process.env.NODE_ENV === "development"
+    ? "563f2884f5b84848a1a91323251606"
+    : undefined);
+if (!WEATHER_API_KEY) {
+  throw new Error("WEATHER_API_KEY environment variable is required");
+}
+
 const API_BASE_URL = "https://api.weatherapi.com/v1";
 
 async function fetchFromWeatherAPI(url: string): Promise<any> {
   const response = await fetch(`${url}&key=${WEATHER_API_KEY}`);
-  
+
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error("Invalid API key");
@@ -26,7 +41,7 @@ async function fetchFromWeatherAPI(url: string): Promise<any> {
 function transformWeatherData(data: any): WeatherData {
   // Get today's forecast for min/max temps if available
   const todayForecast = data.forecast?.forecastday?.[0];
-  
+
   return {
     location: {
       name: data.location.name,
@@ -53,21 +68,25 @@ function transformWeatherData(data: any): WeatherData {
       dt: Math.floor(new Date(data.location.localtime).getTime() / 1000),
     },
     sys: {
-      sunrise: todayForecast ? parseTimeToTimestamp(todayForecast.astro.sunrise) : getDefaultTime(6, 0),
-      sunset: todayForecast ? parseTimeToTimestamp(todayForecast.astro.sunset) : getDefaultTime(18, 0),
+      sunrise: todayForecast
+        ? parseTimeToTimestamp(todayForecast.astro.sunrise)
+        : getDefaultTime(6, 0),
+      sunset: todayForecast
+        ? parseTimeToTimestamp(todayForecast.astro.sunset)
+        : getDefaultTime(18, 0),
     },
   };
 }
 
 function parseTimeToTimestamp(timeStr: string): number {
   const today = new Date();
-  const [time, period] = timeStr.split(' ');
-  const [hours, minutes] = time.split(':').map(Number);
-  
+  const [time, period] = timeStr.split(" ");
+  const [hours, minutes] = time.split(":").map(Number);
+
   let hour24 = hours;
-  if (period === 'PM' && hours !== 12) hour24 += 12;
-  if (period === 'AM' && hours === 12) hour24 = 0;
-  
+  if (period === "PM" && hours !== 12) hour24 += 12;
+  if (period === "AM" && hours === 12) hour24 = 0;
+
   today.setHours(hour24, minutes, 0, 0);
   return Math.floor(today.getTime() / 1000);
 }
@@ -80,39 +99,49 @@ function getDefaultTime(hour: number, minute: number): number {
 
 // Map WeatherAPI condition codes to OpenWeatherMap-style icon codes for consistency
 function getIconCode(conditionCode: number, isDay: number): string {
-  const dayNight = isDay ? 'd' : 'n';
-  
+  const dayNight = isDay ? "d" : "n";
+
   // Sunny/Clear
   if (conditionCode === 1000) return `01${dayNight}`;
-  
+
   // Partly cloudy
   if ([1003].includes(conditionCode)) return `02${dayNight}`;
-  
+
   // Cloudy
   if ([1006, 1009].includes(conditionCode)) return `03${dayNight}`;
-  
+
   // Overcast
   if ([1030, 1135, 1147].includes(conditionCode)) return `04${dayNight}`;
-  
+
   // Rain
-  if ([1063, 1150, 1153, 1168, 1171, 1180, 1183, 1186, 1189, 1192, 1195, 1198, 1201, 1240, 1243, 1246].includes(conditionCode)) {
+  if (
+    [
+      1063, 1150, 1153, 1168, 1171, 1180, 1183, 1186, 1189, 1192, 1195, 1198,
+      1201, 1240, 1243, 1246,
+    ].includes(conditionCode)
+  ) {
     return `10${dayNight}`;
   }
-  
+
   // Thunderstorm
-  if ([1087, 1273, 1276, 1279, 1282].includes(conditionCode)) return `11${dayNight}`;
-  
+  if ([1087, 1273, 1276, 1279, 1282].includes(conditionCode))
+    return `11${dayNight}`;
+
   // Snow
-  if ([1066, 1069, 1072, 1114, 1117, 1204, 1207, 1210, 1213, 1216, 1219, 1222, 1225, 1237, 1249, 1252, 1255, 1258, 1261, 1264].includes(conditionCode)) {
+  if (
+    [
+      1066, 1069, 1072, 1114, 1117, 1204, 1207, 1210, 1213, 1216, 1219, 1222,
+      1225, 1237, 1249, 1252, 1255, 1258, 1261, 1264,
+    ].includes(conditionCode)
+  ) {
     return `13${dayNight}`;
   }
-  
+
   // Default to cloudy
   return `03${dayNight}`;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
   // Get current weather by coordinates
   app.get("/api/weather/current", async (req, res) => {
     try {
@@ -132,14 +161,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const weatherData = transformWeatherData(data);
-      
+
       // Cache the result
       await storage.setCachedWeather(lat, lon, weatherData);
-      
+
       res.json(weatherData);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid coordinates", errors: error.errors });
+        res
+          .status(400)
+          .json({ message: "Invalid coordinates", errors: error.errors });
       } else if (error instanceof Error) {
         res.status(500).json({ message: error.message });
       } else {
@@ -156,18 +187,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const data = await fetchFromWeatherAPI(
-        `${API_BASE_URL}/forecast.json?q=${encodeURIComponent(query)}&days=1&aqi=no&alerts=no`
+        `${API_BASE_URL}/forecast.json?q=${encodeURIComponent(
+          query
+        )}&days=1&aqi=no&alerts=no`
       );
 
       const weatherData = transformWeatherData(data);
-      
+
       // Cache the result
-      await storage.setCachedWeather(data.location.lat, data.location.lon, weatherData);
-      
+      await storage.setCachedWeather(
+        data.location.lat,
+        data.location.lon,
+        weatherData
+      );
+
       res.json(weatherData);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid city name", errors: error.errors });
+        res
+          .status(400)
+          .json({ message: "Invalid city name", errors: error.errors });
       } else if (error instanceof Error) {
         res.status(500).json({ message: error.message });
       } else {
@@ -196,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Transform WeatherAPI forecast to match our ForecastData interface
       const forecastData: ForecastData = {
-        list: data.forecast.forecastday.flatMap((day: any) => 
+        list: data.forecast.forecastday.flatMap((day: any) =>
           day.hour.map((hour: any) => ({
             dt: Math.floor(new Date(hour.time).getTime() / 1000),
             main: {
@@ -206,12 +245,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               temp_max: hour.temp_c,
               humidity: hour.humidity,
             },
-            weather: [{
-              main: hour.condition.text,
-              description: hour.condition.text,
-              icon: getIconCode(hour.condition.code, hour.is_day),
-              id: hour.condition.code,
-            }],
+            weather: [
+              {
+                main: hour.condition.text,
+                description: hour.condition.text,
+                icon: getIconCode(hour.condition.code, hour.is_day),
+                id: hour.condition.code,
+              },
+            ],
             wind: {
               speed: hour.wind_kph / 3.6, // Convert kph to m/s
               deg: hour.wind_degree,
@@ -224,14 +265,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           country: data.location.country,
         },
       };
-      
+
       // Cache the result
       await storage.setCachedForecast(lat, lon, forecastData);
-      
+
       res.json(forecastData);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid coordinates", errors: error.errors });
+        res
+          .status(400)
+          .json({ message: "Invalid coordinates", errors: error.errors });
       } else if (error instanceof Error) {
         res.status(500).json({ message: error.message });
       } else {
@@ -262,7 +305,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(results);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid search query", errors: error.errors });
+        res
+          .status(400)
+          .json({ message: "Invalid search query", errors: error.errors });
       } else if (error instanceof Error) {
         res.status(500).json({ message: error.message });
       } else {

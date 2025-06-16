@@ -75,7 +75,7 @@ Core weather endpoints:
 
 ### Development Environment
 - **Platform**: Replit with Node.js 20 runtime
-- **Database**: PostgreSQL 16 module
+- **Weather API**: WeatherAPI.com with configured API key
 - **Dev Server**: Vite with HMR and error overlay
 - **Port Configuration**: Server on port 5000, proxied to port 80
 

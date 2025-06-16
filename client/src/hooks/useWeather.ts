@@ -1,9 +1,33 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import type { WeatherData, ForecastData, SearchResult, Coordinates } from "@shared/schema";
+import type {
+  WeatherData,
+  ForecastData,
+  SearchResult,
+  Coordinates,
+} from "@shared/schema";
 
 export function useCurrentWeather(lat?: number, lon?: number) {
   return useQuery<WeatherData>({
     queryKey: ["/api/weather/current", lat, lon],
+    queryFn: async () => {
+      if (lat === undefined || lon === undefined) {
+        throw new Error("Coordinates are required");
+      }
+
+      const params = new URLSearchParams({
+        lat: lat.toString(),
+        lon: lon.toString(),
+      });
+
+      const response = await fetch(`/api/weather/current?${params}`);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to fetch weather data");
+      }
+
+      return response.json();
+    },
     enabled: lat !== undefined && lon !== undefined,
     refetchInterval: 10 * 60 * 1000, // Refresh every 10 minutes
     staleTime: 5 * 60 * 1000, // Consider stale after 5 minutes
@@ -15,12 +39,12 @@ export function useWeatherByCity() {
     mutationFn: async (city: string) => {
       const params = new URLSearchParams({ q: city });
       const response = await fetch(`/api/weather/city?${params}`);
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch weather data');
+        throw new Error(error.message || "Failed to fetch weather data");
       }
-      
+
       return response.json();
     },
   });
@@ -29,27 +53,49 @@ export function useWeatherByCity() {
 export function useForecast(lat?: number, lon?: number) {
   return useQuery<ForecastData>({
     queryKey: ["/api/weather/forecast", lat, lon],
+    queryFn: async () => {
+      if (lat === undefined || lon === undefined) {
+        throw new Error("Coordinates are required");
+      }
+
+      const params = new URLSearchParams({
+        lat: lat.toString(),
+        lon: lon.toString(),
+      });
+
+      const response = await fetch(`/api/weather/forecast?${params}`);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to fetch forecast data");
+      }
+
+      return response.json();
+    },
     enabled: lat !== undefined && lon !== undefined,
     refetchInterval: 30 * 60 * 1000, // Refresh every 30 minutes
     staleTime: 15 * 60 * 1000, // Consider stale after 15 minutes
   });
 }
 
-export function useCitySearch() {
-  return useMutation<SearchResult[], Error, string>({
-    mutationFn: async (query: string) => {
+export function useCitySearch(query: string) {
+  return useQuery<SearchResult[]>({
+    queryKey: ["/api/weather/search", query],
+    queryFn: async () => {
       if (query.length < 2) return [];
-      
+
       const params = new URLSearchParams({ q: query });
       const response = await fetch(`/api/weather/search?${params}`);
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to search cities');
+        throw new Error(error.message || "Failed to search cities");
       }
-      
+
       return response.json();
     },
+    enabled: query.length >= 2,
+    staleTime: 5 * 60 * 1000, // Cache results for 5 minutes
   });
 }
 
@@ -58,7 +104,7 @@ export function useGeolocation() {
     mutationFn: async () => {
       return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
-          reject(new Error('Geolocation is not supported by this browser'));
+          reject(new Error("Geolocation is not supported by this browser"));
           return;
         }
 
@@ -72,16 +118,16 @@ export function useGeolocation() {
           (error) => {
             switch (error.code) {
               case error.PERMISSION_DENIED:
-                reject(new Error('Location access denied by user'));
+                reject(new Error("Location access denied by user"));
                 break;
               case error.POSITION_UNAVAILABLE:
-                reject(new Error('Location information unavailable'));
+                reject(new Error("Location information unavailable"));
                 break;
               case error.TIMEOUT:
-                reject(new Error('Location request timed out'));
+                reject(new Error("Location request timed out"));
                 break;
               default:
-                reject(new Error('An unknown error occurred'));
+                reject(new Error("An unknown error occurred"));
                 break;
             }
           },

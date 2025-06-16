@@ -10,8 +10,13 @@ deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
 run = ["npm", "run", "start"]
 
+[env]
+WEATHER_API_KEY = "563f2884f5b84848a1a91323251606"
+CACHE_DURATION = "600000"
+CACHE_CLEANUP_INTERVAL = "1800000"
+
 [[ports]]
-localPort = 5000
+localPort = 3000
 externalPort = 80
 
 [workflows]
