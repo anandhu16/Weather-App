@@ -76,24 +76,12 @@ export function serveStatic(app: Express) {
     );
   }
 
+  // Log the contents of the dist directory for debugging
+  console.log("Contents of dist directory:", fs.readdirSync(distPath));
+  console.log("Full path to dist:", distPath);
+
   // Serve static files from the client build directory
-  app.use(
-    express.static(distPath, {
-      index: false, // Don't serve index.html for directory requests
-      extensions: [
-        "html",
-        "js",
-        "css",
-        "json",
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "svg",
-        "ico",
-      ],
-    })
-  );
+  app.use(express.static(distPath));
 
   // Serve API routes
   app.use("/api", (req, res, next) => {
@@ -106,6 +94,8 @@ export function serveStatic(app: Express) {
 
   // Serve index.html for all other routes (client-side routing)
   app.get("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const indexPath = path.resolve(distPath, "index.html");
+    console.log("Serving index.html from:", indexPath);
+    res.sendFile(indexPath);
   });
 }
