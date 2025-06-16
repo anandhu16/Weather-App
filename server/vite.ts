@@ -23,7 +23,7 @@ export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: true,
+    allowedHosts: true as const,
   };
 
   const vite = await createViteServer({
@@ -68,7 +68,7 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  const distPath = path.resolve(import.meta.dirname, "..", "dist", "client");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
@@ -76,9 +76,19 @@ export function serveStatic(app: Express) {
     );
   }
 
+  // Serve static files from the client build directory
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // Serve API routes
+  app.use("/api", (req, res, next) => {
+    if (!req.path.startsWith("/api")) {
+      return next();
+    }
+    // API routes are handled by the Express router
+    next();
+  });
+
+  // fall through to index.html for client-side routing
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
