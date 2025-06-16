@@ -156,7 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const data = await fetchFromWeatherAPI(
-        `${API_BASE_URL}/current.json?q=${encodeURIComponent(query)}&aqi=no`
+        `${API_BASE_URL}/forecast.json?q=${encodeURIComponent(query)}&days=1&aqi=no&alerts=no`
       );
 
       const weatherData = transformWeatherData(data);
